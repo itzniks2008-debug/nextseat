@@ -2,7 +2,9 @@ const crypto = require("crypto");
 
 module.exports = async (req, res) => {
 
-  // Razorpay webhooks must use POST
+  // Vercel must NOT parse the body before we verify Razorpay's signature
+  // See config at the bottom of this file.
+
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -15,32 +17,51 @@ module.exports = async (req, res) => {
     const webhookSecret =
       process.env.RAZORPAY_WEBHOOK_SECRET;
 
-    if (!webhookSecret) {
-      console.error("Webhook secret is missing");
-
-      return res.status(500).json({
-        success: false
-      });
-    }
-
     const signature =
       req.headers["x-razorpay-signature"];
+
+    if (!webhookSecret) {
+      console.error("RAZORPAY_WEBHOOK_SECRET is missing");
+
+      return res.status(500).json({
+        success: false,
+        message: "Webhook secret missing"
+      });
+    }
 
     if (!signature) {
       return res.status(400).json({
         success: false,
-        message: "Missing webhook signature"
+        message: "Missing Razorpay signature"
       });
     }
 
-    // Generate expected signature
+    // --------------------------------
+    // 1. READ RAW REQUEST BODY
+    // --------------------------------
+
+    const chunks = [];
+
+    for await (const chunk of req) {
+      chunks.push(
+        Buffer.isBuffer(chunk)
+          ? chunk
+          : Buffer.from(chunk)
+      );
+    }
+
+    const rawBody = Buffer.concat(chunks);
+
+    // --------------------------------
+    // 2. VERIFY RAZORPAY SIGNATURE
+    // --------------------------------
+
     const expectedSignature =
       crypto
         .createHmac("sha256", webhookSecret)
-        .update(JSON.stringify(req.body))
+        .update(rawBody)
         .digest("hex");
 
-    // Verify signature
     if (
       expectedSignature.length !== signature.length ||
       !crypto.timingSafeEqual(
@@ -48,19 +69,32 @@ module.exports = async (req, res) => {
         Buffer.from(signature)
       )
     ) {
+      console.error("Invalid Razorpay webhook signature");
+
       return res.status(400).json({
         success: false,
         message: "Invalid webhook signature"
       });
     }
 
-    const event = req.body.event;
+    // --------------------------------
+    // 3. ONLY PARSE AFTER SIGNATURE
+    //    IS VERIFIED
+    // --------------------------------
 
-    // Payment successfully captured
+    const body =
+      JSON.parse(rawBody.toString("utf8"));
+
+    const event = body.event;
+
+    // --------------------------------
+    // 4. PAYMENT CAPTURED
+    // --------------------------------
+
     if (event === "payment.captured") {
 
       const payment =
-        req.body.payload.payment.entity;
+        body.payload.payment.entity;
 
       console.log(
         "Payment captured:",
@@ -70,11 +104,14 @@ module.exports = async (req, res) => {
       );
     }
 
-    // Order successfully paid
+    // --------------------------------
+    // 5. ORDER PAID
+    // --------------------------------
+
     if (event === "order.paid") {
 
       const order =
-        req.body.payload.order.entity;
+        body.payload.order.entity;
 
       console.log(
         "Order paid:",
@@ -83,11 +120,14 @@ module.exports = async (req, res) => {
       );
     }
 
-    // Payment failed
+    // --------------------------------
+    // 6. PAYMENT FAILED
+    // --------------------------------
+
     if (event === "payment.failed") {
 
       const payment =
-        req.body.payload.payment.entity;
+        body.payload.payment.entity;
 
       console.log(
         "Payment failed:",
@@ -95,7 +135,10 @@ module.exports = async (req, res) => {
       );
     }
 
-    // Always acknowledge valid webhook
+    // --------------------------------
+    // 7. WEBHOOK RECEIVED SUCCESSFULLY
+    // --------------------------------
+
     return res.status(200).json({
       success: true
     });
@@ -110,5 +153,15 @@ module.exports = async (req, res) => {
     return res.status(500).json({
       success: false
     });
+  }
+};
+
+
+// IMPORTANT:
+// Disable Vercel's automatic JSON body parser.
+// Razorpay signature verification needs the original raw body.
+module.exports.config = {
+  api: {
+    bodyParser: false
   }
 };
