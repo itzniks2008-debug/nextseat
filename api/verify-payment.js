@@ -1,6 +1,16 @@
 const crypto = require("crypto");
 
 module.exports = async (req, res) => {
+  // Allow requests from NextSeat
+  res.setHeader("Access-Control-Allow-Origin", "https://nextseat.co.in");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Handle browser preflight request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -30,12 +40,18 @@ module.exports = async (req, res) => {
       razorpay_order_id + "|" + razorpay_payment_id;
 
     const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .createHmac(
+        "sha256",
+        process.env.RAZORPAY_KEY_SECRET
+      )
       .update(body)
       .digest("hex");
 
     const isValid =
-      expectedSignature === razorpay_signature;
+      crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(razorpay_signature)
+      );
 
     if (!isValid) {
       return res.status(400).json({
@@ -57,4 +73,4 @@ module.exports = async (req, res) => {
       message: "Unable to verify payment"
     });
   }
-};
+};  
