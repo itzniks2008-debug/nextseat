@@ -6,6 +6,16 @@ const razorpay = new Razorpay({
 });
 
 module.exports = async (req, res) => {
+  // Allow requests from NextSeat
+  res.setHeader("Access-Control-Allow-Origin", "https://nextseat.co.in");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Handle browser preflight request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -28,9 +38,9 @@ module.exports = async (req, res) => {
       currency: "INR",
       receipt: `NS_${Date.now()}`,
       notes: {
-        name: name,
-        email: email,
-        mobile: mobile
+        name,
+        email,
+        mobile
       }
     });
 
