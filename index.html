@@ -1317,9 +1317,9 @@ html {
       We’ll help you find the next sensible step.
     </p>
 
-    <a href="https://docs.google.com/forms/d/e/1FAIpQLSecMNZ8Zi81W43NBu1UrVlkgX3TZglbJy_Tniujf9Ep-N9xmA/viewform" class="contact-button">
-      Book counselling <span>→</span>
-    </a>
+    <button type="button" class="contact-btn" onclick="openBookingForm()">
+    Book counselling <span>→</span>
+    </button>
   </div>
 
   <footer class="site-footer">
@@ -1419,5 +1419,330 @@ document.querySelectorAll('.faq-question').forEach(function(button) {
 });
 
 </script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<div id="bookingModal" style="
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.65);
+    z-index:9999;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+">
+    <div style="
+        background:white;
+        width:100%;
+        max-width:430px;
+        border-radius:20px;
+        padding:30px;
+        box-sizing:border-box;
+        box-shadow:0 20px 60px rgba(0,0,0,0.25);
+        position:relative;
+    ">
+
+        <button type="button" onclick="closeBookingForm()" style="
+            position:absolute;
+            top:15px;
+            right:18px;
+            border:none;
+            background:none;
+            font-size:26px;
+            cursor:pointer;
+            color:#555;
+        ">×</button>
+
+        <h2 style="
+            margin:0 0 8px;
+            color:#102a43;
+            font-size:26px;
+        ">Book Counselling</h2>
+
+        <p style="
+            margin:0 0 22px;
+            color:#667085;
+            font-size:14px;
+        ">
+            Enter your details to continue with counselling.
+        </p>
+
+        <form id="bookingForm">
+
+            <label style="display:block;margin-bottom:6px;font-weight:600;">
+                Name
+            </label>
+
+            <input
+                type="text"
+                id="customerName"
+                placeholder="Enter your full name"
+                required
+                style="
+                    width:100%;
+                    padding:13px;
+                    margin-bottom:16px;
+                    border:1px solid #d0d5dd;
+                    border-radius:10px;
+                    box-sizing:border-box;
+                    font-size:15px;
+                "
+            >
+
+            <label style="display:block;margin-bottom:6px;font-weight:600;">
+                Mobile
+            </label>
+
+            <input
+                type="tel"
+                id="customerMobile"
+                placeholder="Enter 10-digit mobile number"
+                pattern="[0-9]{10}"
+                maxlength="10"
+                required
+                style="
+                    width:100%;
+                    padding:13px;
+                    margin-bottom:16px;
+                    border:1px solid #d0d5dd;
+                    border-radius:10px;
+                    box-sizing:border-box;
+                    font-size:15px;
+                "
+            >
+
+            <label style="display:block;margin-bottom:6px;font-weight:600;">
+                Email
+            </label>
+
+            <input
+                type="email"
+                id="customerEmail"
+                placeholder="Enter your email"
+                required
+                style="
+                    width:100%;
+                    padding:13px;
+                    margin-bottom:20px;
+                    border:1px solid #d0d5dd;
+                    border-radius:10px;
+                    box-sizing:border-box;
+                    font-size:15px;
+                "
+            >
+
+            <button
+                type="submit"
+                style="
+                    width:100%;
+                    padding:14px;
+                    border:none;
+                    border-radius:10px;
+                    background:#1769d5;
+                    color:white;
+                    font-size:16px;
+                    font-weight:700;
+                    cursor:pointer;
+                "
+            >
+                Continue to Pay ₹3,499
+            </button>
+
+        </form>
+
+        <p id="paymentMessage" style="
+            margin:15px 0 0;
+            text-align:center;
+            font-size:14px;
+        "></p>
+
+    </div>
+</div>
+<script>
+const RAZORPAY_KEY_ID = "rzp_test_TZWyRoZixTihqI";
+
+const GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSecMNZ8Zi81W43NBu1UrVlkgX3TZglbJy_Tniujf9Ep-N9xmA/viewform?usp=header";
+
+const CREATE_ORDER_URL =
+    "https://nextseat-lac.vercel.app/api/create-order";
+
+const VERIFY_PAYMENT_URL =
+    "https://nextseat-lac.vercel.app/api/verify-payment";
+
+
+function openBookingForm() {
+    document.getElementById("bookingModal").style.display = "flex";
+}
+
+
+function closeBookingForm() {
+    document.getElementById("bookingModal").style.display = "none";
+}
+
+
+document.getElementById("bookingForm").addEventListener("submit", async function(event) {
+
+    event.preventDefault();
+
+    const name = document.getElementById("customerName").value.trim();
+    const mobile = document.getElementById("customerMobile").value.trim();
+    const email = document.getElementById("customerEmail").value.trim();
+    const message = document.getElementById("paymentMessage");
+
+    message.style.color = "#1769d5";
+    message.textContent = "Creating secure payment...";
+
+    try {
+
+        // 1. Create Razorpay order on our server
+        const orderResponse = await fetch(CREATE_ORDER_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                name: name,
+                mobile: mobile,
+                email: email
+            })
+        });
+
+        const orderData = await orderResponse.json();
+
+        if (!orderResponse.ok || !orderData.success) {
+            throw new Error(
+                orderData.message || "Unable to create payment order"
+            );
+        }
+
+
+        // 2. Open Razorpay Checkout
+        const options = {
+
+            key: RAZORPAY_KEY_ID,
+
+            amount: orderData.order.amount,
+
+            currency: "INR",
+
+            name: "NextSeat",
+
+            description: "NextSeat Counselling",
+
+            image: "https://nextseat.co.in/logo.png",
+
+            order_id: orderData.order.id,
+
+            prefill: {
+                name: name,
+                email: email,
+                contact: mobile
+            },
+
+            theme: {
+                color: "#1769d5"
+            },
+
+
+            // 3. Razorpay payment successful
+            handler: async function(response) {
+
+                message.style.color = "#1769d5";
+                message.textContent = "Verifying payment...";
+
+
+                // 4. Send payment details to our server
+                const verifyResponse = await fetch(
+                    VERIFY_PAYMENT_URL,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+
+                            razorpay_order_id:
+                                response.razorpay_order_id,
+
+                            razorpay_payment_id:
+                                response.razorpay_payment_id,
+
+                            razorpay_signature:
+                                response.razorpay_signature
+
+                        })
+                    }
+                );
+
+
+                const verifyData =
+                    await verifyResponse.json();
+
+
+                // 5. Payment verified
+                if (
+                    verifyResponse.ok &&
+                    verifyData.success
+                ) {
+
+                    message.style.color = "#16803c";
+
+                    message.innerHTML =
+                        "<strong>Payment Successful! ✅</strong><br>" +
+                        "Our team will contact you shortly.";
+
+                    // Wait briefly so user can see success message
+                    setTimeout(function() {
+
+                        window.location.href =
+                            GOOGLE_FORM_URL;
+
+                    }, 1500);
+
+                } else {
+
+                    message.style.color = "#d92d20";
+
+                    message.textContent =
+                        "Payment verification failed. Please contact NextSeat.";
+
+                }
+
+            },
+
+
+            // Payment failed
+            modal: {
+                ondismiss: function() {
+
+                    message.style.color = "#667085";
+
+                    message.textContent =
+                        "Payment cancelled.";
+
+                }
+            }
+
+        };
+
+
+        const razorpay =
+            new Razorpay(options);
+
+        razorpay.open();
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        message.style.color = "#d92d20";
+
+        message.textContent =
+            "Something went wrong. Please try again.";
+
+    }
+
+});
+                        </script>
 </body>
 </html>
