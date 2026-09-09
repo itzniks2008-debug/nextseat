@@ -125,7 +125,7 @@ module.exports = async (req, res) => {
     // ₹3,499 = 349900 paise
     // --------------------------------
 
-    if (payment.amount !== 349900) {
+    if (payment.amount !== 500) {
       return res.status(400).json({
         success: false,
         message: "Payment amount mismatch"
